@@ -13,17 +13,19 @@ XY#=$6C00!)
 Commands are composed by a series of operations executed left-to-right, unlike other languages there is no instruction nesting, the currently available instructions are:
 * `+` - Add operand and operator
 * `-` - Subtract operand from operator
-* `*` - Multiply operand by operator
-* `/` - Divide operand by operator
 * `:` - Write operator to memory location in operand
 * `<` - Check if operator is lesser than operand
 * `>` - Check if operator is greater than operand
 * `=` - Check if operator is equal to operand
+* `(` - Start of conditional block, enter if operator is not zero
+* `)` - End of conditional block, jump to start of block if operator is not zero 
+
+Planned but not yet implemented:
+* `*` - Multiply operand by operator
+* `/` - Divide operand by operator
 * `|` - Logical OR operator and operand
 * `&` - Logical AND operator and operand
 * `^` - Logical XOR operator and operand
-* `(` - Start of conditional block, enter if operator is not zero
-* `)` - End of conditional block, jump to start of block if operator is not zero 
 
 Modifiers act on the operand and operators values of instructions:
 * `\`` - Convert to ascii hex representation
