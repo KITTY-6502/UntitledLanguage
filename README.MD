@@ -1,5 +1,15 @@
 # Untitled Programming Language
 
+```
+"EXAMPLE 10PRINT SCRIPT"
+$6800:XY
+!(
+  r<$80:R
+  $C0+R#:XY#
+  XY#+$1:XY
+XY#=$6C00!)
+```
+
 Commands are composed by a series of operations executed left-to-right, unlike other languages there is no instruction nesting, the currently available instructions are:
 * `+` - Add operand and operator
 * `-` - Subtract operand from operator
