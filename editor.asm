@@ -145,7 +145,7 @@ _EditorLoop
     #cli
 
 jmp [EditorLoop]
-_CODECONTINUE
+_CODEEND
         #jsr [DrawScreen]
         jmp [RESETWARM]
 _MAIN
