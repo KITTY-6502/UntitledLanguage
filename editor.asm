@@ -56,6 +56,7 @@
 .var OP
 .var Cur_Stack
 .val STACK_SIZE    30
+.var OPStack
 .var OP1_Stack_PTR 1
 .var OP1_Stack     STACK_SIZE
 .var OP2_Stack_PTR 1

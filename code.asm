@@ -218,6 +218,7 @@ _Run
 __tEOF
     lda <OP>; beq (next); jmp [oRUN]
     ___next
+    bit [$7040]; bpl (next)
 jmp [CODEEND]
 __tIgnore
 jmp [tEND]
@@ -225,7 +226,8 @@ __tOpcode
     lda <OP>; beq (next); jmp [oRUN]
     ___next
     txa; lsr A; sta <OP>
-    lda $7F; txa; txs
+    tsx; stx <OPStack>
+    ldx $7F; txs
 jmp [tEND]
 __tVariable
     lsr A
@@ -251,7 +253,7 @@ __tCondStart
     ___checkIfTrue
     # Y is 0 at this point
     ora $00
-    sta [$6801]
+    #sta [$6801]
     bne (True)
     ___False
     # X is Indent Counter
@@ -307,7 +309,7 @@ __tCondEnd
     ___checkIfTrue
     # Y is 0 at this point
     ora $00
-    sta [$6802]
+    #sta [$6802]
     beq (False)
     ___True
     # X is Indent Counter
@@ -389,7 +391,7 @@ __tHexNumber
     ____0to9
     bra (2ndPush)
     ____AtoF
-    ora %0100_0000  # turn lowercase
+    ora %0010_0000  # turn lowercase
     cmp 'a'; bcc (1stPush)
     cmp 'f'+1; bcs (1stPush)
     sec; sbc 'a'-10
@@ -398,6 +400,7 @@ __tHexNumber
     lda <R0>; asl A; asl A; asl A; asl A
     ora <R1>
     pha
+    #sta [$6900]
     bra (1stNibble)
     ____1stPush
     lda <R0>; pha
@@ -456,7 +459,169 @@ __tNot
 jmp [tEND]
     
 # ============================================
+__OPCODES
+  # Control Codes
+  .word oIgnore       # 00
+  .word oIgnore       # 01
+  .word oIgnore       # 02
+  .word oIgnore       # 03
+  .word oIgnore       # 04
+  .word oIgnore       # 05
+  .word oIgnore       # 06
+  .word oIgnore       # 07
+  .word oIgnore       # 08
+  .word oIgnore       # 09
+  .word oIgnore       # 0A
+  .word oIgnore       # 0B
+  .word oIgnore       # 0C
+  .word oIgnore       # 0D
+  .word oIgnore       # 0E
+  .word oIgnore       # 0F
+  .word oIgnore       # 10
+  .word oIgnore       # 11
+  .word oIgnore       # 12
+  .word oIgnore       # 13
+  .word oIgnore       # 14
+  .word oIgnore       # 15
+  .word oIgnore       # 16
+  .word oIgnore       # 17
+  .word oIgnore       # 18
+  .word oIgnore       # 19
+  .word oIgnore       # 1A
+  .word oIgnore       # 1B
+  .word oIgnore       # 1C
+  .word oIgnore       # 1D
+  .word oIgnore       # 1E
+  .word oIgnore       # 1F
+  # Symbols
+  .word oIgnore       # 00
+  .word oIgnore       # 01
+  .word oIgnore       # 02
+  .word oIgnore       # 03
+  .word oIgnore       # 04
+  .word oIgnore       # 05
+  .word oIgnore       # 06
+  .word oIgnore       # 07
+  .word oIgnore       # 08
+  .word oIgnore       # 09
+  .word oIgnore       # 0A
+  .word oIgnore       # 0B
+  .word oIgnore       # 0C
+  .word oIgnore       # 0D
+  .word oIgnore       # 0E
+  .word oIgnore       # 0F
+  .word oIgnore       # 10
+  .word oIgnore       # 11
+  .word oIgnore       # 12
+  .word oIgnore       # 13
+  .word oIgnore       # 14
+  .word oIgnore       # 15
+  .word oIgnore       # 16
+  .word oIgnore       # 17
+  .word oIgnore       # 18
+  .word oIgnore       # 19
+  .word oStore        # 1A
+  .word oIgnore       # 1B
+  .word oIgnore       # 1C
+  .word oIgnore       # 1D
+  .word oIgnore       # 1E
+  .word oIgnore       # 1F
+  # Uppercase
+  .word oIgnore       # 00
+  .word oIgnore       # 01
+  .word oIgnore       # 02
+  .word oIgnore       # 03
+  .word oIgnore       # 04
+  .word oIgnore       # 05
+  .word oIgnore       # 06
+  .word oIgnore       # 07
+  .word oIgnore       # 08
+  .word oIgnore       # 09
+  .word oIgnore       # 0A
+  .word oIgnore       # 0B
+  .word oIgnore       # 0C
+  .word oIgnore       # 0D
+  .word oIgnore       # 0E
+  .word oIgnore       # 0F
+  .word oIgnore       # 10
+  .word oIgnore       # 11
+  .word oIgnore       # 12
+  .word oIgnore       # 13
+  .word oIgnore       # 14
+  .word oIgnore       # 15
+  .word oIgnore       # 16
+  .word oIgnore       # 17
+  .word oIgnore       # 18
+  .word oIgnore       # 19
+  .word oIgnore       # 1A
+  .word oIgnore       # 1B
+  .word oIgnore       # 1C
+  .word oIgnore       # 1D
+  .word oIgnore       # 1E
+  .word oIgnore       # 1F
+  # Lowercase
+  .word oIgnore       # 00
+  .word oIgnore       # 01
+  .word oIgnore       # 02
+  .word oIgnore       # 03
+  .word oIgnore       # 04
+  .word oIgnore       # 05
+  .word oIgnore       # 06
+  .word oIgnore       # 07
+  .word oIgnore       # 08
+  .word oIgnore       # 09
+  .word oIgnore       # 0A
+  .word oIgnore       # 0B
+  .word oIgnore       # 0C
+  .word oIgnore       # 0D
+  .word oIgnore       # 0E
+  .word oIgnore       # 0F
+  .word oIgnore       # 10
+  .word oIgnore       # 11
+  .word oIgnore       # 12
+  .word oIgnore       # 13
+  .word oIgnore       # 14
+  .word oIgnore       # 15
+  .word oIgnore       # 16
+  .word oIgnore       # 17
+  .word oIgnore       # 18
+  .word oIgnore       # 19
+  .word oIgnore       # 1A
+  .word oIgnore       # 1B
+  .word oIgnore       # 1C
+  .word oIgnore       # 1D
+  .word oIgnore       # 1E
+  .word oIgnore       # 1F
+  
+  
+#--------------------------
 __oRUN
-stz <OP>; tsx; txa; ora %0111_1111; tax; txs
+  lda <OP>; asl A; tax; jmp [[OPCODES+X]]
+__oEND
+  ldy 0
+  ldx <OPStack>; txs
+  stz <OP>;
 jmp [tRUN]
-
+__oIgnore
+jmp [oEND]
+__oStore
+  tsx; stx <R2>
+  ldx <OPStack>; txs; stx <R3>
+  ldx <R2>
+  stz <R0>; stz <R0+1>
+  ___loop
+    inc X
+    bpl (noincrement)
+    inc Y; bra (continue)
+    ___noincrement
+    lda [$0100+X]; sta <R0+0>; inc X
+    stz <R0+1>
+    beq (continue)
+    lda [$0100+X]; sta <R0+1>
+    ___continue
+    
+    inc <R3>; bpl (done)
+    pla; sta [<R0>+Y]
+  bra (loop)
+  ___done
+jmp [oEND]
