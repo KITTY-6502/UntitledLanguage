@@ -115,10 +115,10 @@ _Run
     .word tIgnore    # $1F
     # CHARACTERS
     .word tIgnore        # $20
-    .word tNot         # $21 !
-    .word tString       # $22 "
-    .word tLoad         # $23 #
-    .word tHexNumber    # $24 $
+    .word tInv           # $21 !
+    .word tString        # $22 "
+    .word tLoad          # $23 #
+    .word tHexNumber     # $24 $
     .word tIgnore        # $25 %
     .word tIgnore        # $26 &
     .word tHexAscii      # $27 '
@@ -176,7 +176,7 @@ _Run
     .word tVariable  # $5A
     #
     .word tIgnore    # $5B
-    .word tIgnore    # $5C
+    .word tCondStart    # $5C \
     .word tIgnore    # $5D
     .word tIgnore    # $5E
     .word tIgnore    # $5F
@@ -199,7 +199,7 @@ _Run
     .word tIgnore    # $6F o
     .word tIgnore    # $70 p
     .word tIgnore    # $71 q
-    .word tOpcode   # $72 (r)andom
+    .word tRandom    # $72 (r)andom
     .word tIgnore    # $73 s
     .word tIgnore    # $74 t
     .word tIgnore    # $75 u
@@ -210,10 +210,10 @@ _Run
     .word tIgnore    # $7A z
     #
     .word tIgnore    # $7B {
-    .word tCondStart# $7C |
+    .word tIgnore    # $7C |
     .word tIgnore    # $7D }
-    .word tIgnore    # $7E ~
-    .word tIgnore    # $7F
+    .word tNot       # $7E ~
+    .word tIgnore    # DELETE
 # Tokens
 __tEOF
     lda <OP>; beq (next); jmp [oRUN]
@@ -230,11 +230,13 @@ __tOpcode
     ldx $7F; txs
 jmp [tEND]
 __tVariable
-    lsr A
-    clc; adc $80
+    # hi byte
+    ldx 0
+    phx
+    # lo byte
+    lsr A; clc; adc $80
     pha
-    lda 0
-    pha
+    
 jmp [tEND]
 __tEndCmd
     lda <OP>; beq (next); jmp [oRUN]
@@ -267,7 +269,7 @@ __tCondStart
     lda [<PC>+Y]
     beq (endOfFile)
     cmp ')'; beq (close)
-    cmp '|'; beq (closeMaybe)
+    cmp '\'; beq (closeMaybe)
     cmp '('; beq (open)
     cmp $22; beq (string)
     bra (FalseLoop)
@@ -376,7 +378,7 @@ __tHexNumber
     ____0to9
     bra (2ndNibble)
     ____AtoF
-    ora %0100_0000  # turn lowercase
+    ora %0010_0000  # turn lowercase
     cmp 'a'; bcc (done)
     cmp 'f'+1; bcs (done)
     sec; sbc 'a'-10
@@ -412,31 +414,39 @@ __tDecNumber
     sec; sbc '0'; pha
 jmp [tEND]
 __tLoad
-    tsx; stx <R0>; txa; ora %0111_1111; tax; stx <R1>; txs
+    tsx; stx <R0>;
+    txa; ora %0111_1111
+    tax; txs
     ___loop
-    dec X; cpx <R0>; bcc (done)
-    lda [$0101+X]; sta <R5>
-    lda [$0100+X]; sta <R4>
-    lda [<R4>+Y]; pha; dec X; bra (loop)
+      cpx <R0>; beq (done)
+      lda [$0100+X]; sta <R2+1>
+      dec X; cpx <R0>; beq (done)
+      lda [$0100+X]; sta <R2+0>
+      dec X
+      lda [<R2>+Y]; pha
+    bra (loop)
     __done
-    ldy 0
 jmp [tEND]
+
 __tHexAscii
-    tsx; stx <R0>; txa; ora %0111_1111; tax; stx <R1>; txs
+    tsx; stx <R0>; txa; ora %0111_1111; tax; stx <R1>
     
     #ldx <R1>
     ___copyLoop
     cpx <R0>; beq (copyDone)
-        lda [$0100+X]; sta [$00C0+X]
+        pla; sta [$00C0+X]
         dec X
     bra (copyLoop)
     ___copyDone
     ldx <R1>
     ___hexLoop
-        lda [$00C0+X]; lsr A; lsr A; lsr A; lsr A
-        tay; lda [table+Y]; pha
+        # lo nibble
         lda [$00C0+X]; and $0F
         tay; lda [table+Y]; pha
+        # hi nibble
+        lda [$00C0+X]; lsr A; lsr A; lsr A; lsr A
+        tay; lda [table+Y]; pha
+        
     dec X; cpx <R0>; bne (hexLoop)
     
     ___done
@@ -444,20 +454,54 @@ __tHexAscii
 jmp [tEND]
 ___table
 .byte '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
-__tNot
-    tsx; txa; ora $80; tay
-    ___notStack
-    inc X; inc Y; beq (done)
-        lda [$0100+X]; bne (one)
-        ___zero
-            lda 1; sta [$0100+X]
-        bra (notStack)
-        ___one
-            lda 0; sta [$0100+X]
-        bra (notStack)
-    ___done
+
+__tInv
+  stz <R0>
+  tsx; bpl (operator)
+  ___operand
+  inc X; bpl (done)
+    pla; ora <R0>; sta <R0>
+  bra (operand)
+  ___operator
+  inc X; bmi (done)
+    pla; ora <R0>; sta <R0>
+  bra (operator)
+  ___done
+  lda <R0>; beq (zero)
+  ___one
+  lda 0; pha
 jmp [tEND]
-    
+  ___zero
+  lda 1; pha
+jmp [tEND]
+
+__tNot
+    lda $EE; sta [$6C30]
+    tsx; stx <R0> 
+    txa; ora $80; tax
+    ___loop
+    inc X; beq (done)
+        pla; xor $FF; pha; pla
+    bra (loop)
+    ___done
+    ldx <R0>; txs
+jmp [tEND]
+
+__tRandom
+  ldx 8
+  lda <RSEED+0>
+  ___loop
+  asl A; rol <RSEED+1>
+  bcc (noxor)
+  ___xor
+  xor $39
+  ___noxor
+  dec Y; bne (loop)
+  # Store back in 0
+  sta <RSEED+0>
+  pha
+jmp [tEND]
+
 # ============================================
 __OPCODES
   # Control Codes
@@ -494,71 +538,71 @@ __OPCODES
   .word oIgnore       # 1E
   .word oIgnore       # 1F
   # Symbols
-  .word oIgnore       # 00
-  .word oIgnore       # 01
-  .word oIgnore       # 02
-  .word oIgnore       # 03
-  .word oIgnore       # 04
-  .word oIgnore       # 05
-  .word oIgnore       # 06
-  .word oIgnore       # 07
-  .word oIgnore       # 08
-  .word oIgnore       # 09
-  .word oIgnore       # 0A
-  .word oIgnore       # 0B
-  .word oIgnore       # 0C
-  .word oIgnore       # 0D
-  .word oIgnore       # 0E
-  .word oIgnore       # 0F
-  .word oIgnore       # 10
-  .word oIgnore       # 11
-  .word oIgnore       # 12
-  .word oIgnore       # 13
-  .word oIgnore       # 14
-  .word oIgnore       # 15
-  .word oIgnore       # 16
-  .word oIgnore       # 17
-  .word oIgnore       # 18
-  .word oIgnore       # 19
-  .word oStore        # 1A
-  .word oIgnore       # 1B
-  .word oIgnore       # 1C
-  .word oIgnore       # 1D
-  .word oIgnore       # 1E
-  .word oIgnore       # 1F
+  .word oIgnore       # 20
+  .word oIgnore       # 21
+  .word oIgnore       # 22
+  .word oIgnore       # 23
+  .word oIgnore       # 24
+  .word oOr           # 25  %
+  .word oAnd          # 26  &
+  .word oIgnore       # 27
+  .word oIgnore       # 28
+  .word oIgnore       # 29
+  .word oIgnore       # 2A
+  .word oAdd          # 2B  +
+  .word oIgnore       # 2C
+  .word oSub          # 2D  -
+  .word oIgnore       # 2E
+  .word oIgnore       # 2F
+  .word oIgnore       # 30
+  .word oIgnore       # 31
+  .word oIgnore       # 32
+  .word oIgnore       # 33
+  .word oIgnore       # 34
+  .word oIgnore       # 35
+  .word oIgnore       # 36
+  .word oIgnore       # 37
+  .word oIgnore       # 38
+  .word oIgnore       # 39
+  .word oStore        # 3A  :
+  .word oIgnore       # 3B
+  .word oIgnore       # 3C
+  .word oIgnore       # 3D
+  .word oIgnore       # 3E
+  .word oIgnore       # 3F
   # Uppercase
-  .word oIgnore       # 00
-  .word oIgnore       # 01
-  .word oIgnore       # 02
-  .word oIgnore       # 03
-  .word oIgnore       # 04
-  .word oIgnore       # 05
-  .word oIgnore       # 06
-  .word oIgnore       # 07
-  .word oIgnore       # 08
-  .word oIgnore       # 09
-  .word oIgnore       # 0A
-  .word oIgnore       # 0B
-  .word oIgnore       # 0C
-  .word oIgnore       # 0D
-  .word oIgnore       # 0E
-  .word oIgnore       # 0F
-  .word oIgnore       # 10
-  .word oIgnore       # 11
-  .word oIgnore       # 12
-  .word oIgnore       # 13
-  .word oIgnore       # 14
-  .word oIgnore       # 15
-  .word oIgnore       # 16
-  .word oIgnore       # 17
-  .word oIgnore       # 18
-  .word oIgnore       # 19
-  .word oIgnore       # 1A
-  .word oIgnore       # 1B
-  .word oIgnore       # 1C
-  .word oIgnore       # 1D
-  .word oIgnore       # 1E
-  .word oIgnore       # 1F
+  .word oIgnore       # 40
+  .word oIgnore       # 41
+  .word oIgnore       # 42
+  .word oIgnore       # 43
+  .word oIgnore       # 44
+  .word oIgnore       # 45
+  .word oIgnore       # 46
+  .word oIgnore       # 47
+  .word oIgnore       # 48
+  .word oIgnore       # 49
+  .word oIgnore       # 4A
+  .word oIgnore       # 4B
+  .word oIgnore       # 4C
+  .word oIgnore       # 4D
+  .word oIgnore       # 4E
+  .word oIgnore       # 4F
+  .word oIgnore       # 50
+  .word oIgnore       # 51
+  .word oIgnore       # 52
+  .word oIgnore       # 53
+  .word oIgnore       # 54
+  .word oIgnore       # 55
+  .word oIgnore       # 56
+  .word oIgnore       # 57
+  .word oIgnore       # 58
+  .word oIgnore       # 59
+  .word oIgnore       # 5A
+  .word oIgnore       # 5B
+  .word oIgnore       # 5C
+  .word oIgnore       # 5D
+  .word oXor          # 5E  ^
+  .word oIgnore       # 5F
   # Lowercase
   .word oIgnore       # 00
   .word oIgnore       # 01
@@ -604,6 +648,9 @@ __oEND
 jmp [tRUN]
 __oIgnore
 jmp [oEND]
+# ============================================
+# Store → Operand into 16bit Addresses at Operator
+#   if the operator runs out of addresses, the last one is incremented by 1
 __oStore
   tsx; stx <R2>
   ldx <OPStack>; txs; stx <R3>
@@ -623,5 +670,109 @@ __oStore
     inc <R3>; bpl (done)
     pla; sta [<R0>+Y]
   bra (loop)
+  ___done
+jmp [oEND]
+# ============================================
+# COMPARE OPS
+# ============================================
+__oEqual
+jmp [oEND]
+__oLesser
+jmp [oEND]
+__oGreater
+jmp [oEND]
+# ============================================
+# MATH OPS
+# ============================================
+# Add → Operator added to Operand
+__oAdd
+  # setup: 7 cycles
+  tsx
+  ldy <OPStack>
+  clc
+  # operation: 19 cycles per byte
+  inc Y; beq (done)
+  ___loop
+    inc X; bmi (zero)
+    pla; adc [$0100+Y]; sta [$0100+Y] 
+  inc Y; bne (loop)
+  ___done
+jmp [oEND]
+  # zero: 15 cycles per byte
+  ___zero
+    lda [$0100+Y]; adc 0; sta [$0100+Y]
+  inc Y; bne (zero)
+jmp [oEND]
+
+# ============================================
+# Sub → Operator subtracted from Operand
+__oSub
+  # setup: 7 cycles
+  tsx
+  ldy <OPStack>
+  sec
+  # operation: 21 cycles per byte
+  inc Y; beq (done)
+  ___loop
+    inc X; bmi (zero)
+    lda [$0100+Y]; sbc [$0100+X]; sta [$0100+Y]
+  inc Y; bne (loop)
+  ___done
+jmp [oEND]
+  # zero: 15 cycles per byte
+  ___zero
+    lda [$0100+Y]; sbc 0; sta [$0100+Y]
+  inc Y; bne (zero)
+jmp [oEND]
+
+# ============================================
+# And → Operator AND with Operand
+__oAnd
+  # setup: 5 cycles
+  tsx
+  ldy <OPStack>
+  # operation: 19 cycles per byte
+  inc Y; beq (done)
+  ___loop
+    inc X; bmi (zero)
+    pla; and [$0100+Y]; sta [$0100+Y] 
+  inc Y; bne (loop)
+  ___done
+jmp [oEND]
+  ___zero
+  # zero: 9 cycles per byte
+  lda 0
+  ____loop  
+    sta [$0100+Y]
+  inc Y; bne (loop)
+jmp [oEND]
+
+# ============================================
+# Or → Operator OR with Operand
+__oOr
+  # setup: 5 cycles
+  tsx
+  ldy <OPStack>
+  # operation: 19 cycles per byte
+  inc Y; beq (done)
+  ___loop
+    inc X; bmi (done)
+    pla; ora [$0100+Y]; sta [$0100+Y] 
+  inc Y; bne (loop)
+  ___done
+jmp [oEND]
+
+# ============================================
+# Xor → Operator XOR with Operand
+__oXor
+  # setup: 5 cycles
+  tsx
+  ldy <OPStack>
+  # operation: 19 cycles per byte
+  inc Y; beq (done)
+  ___loop
+    inc X; bmi (done)
+    pla; xor [$0100+Y]; sta [$0100+Y] 
+  inc Y; bne (loop)
   ___done
 jmp [oEND]
