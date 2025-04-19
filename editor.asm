@@ -113,13 +113,15 @@ _RESETWARM
     
     jsr [BinToDec]
     
+    
+    
     ldx $00
     __drawValue
         lda $F9; sta [$6FE0+X]
     inc X; cpx $20; bne (drawValue)
     
     # Seperator
-    lda '/'; sta [$6BFA]
+    lda '@'; sta [$6BFA]
     # Draw Total
     lda <BufSize+0>; sta <R7+0>
     lda <BufSize+1>; sta <R7+1>
@@ -719,6 +721,7 @@ _kAlt
 .byte '0','1','4',$23,'5','7',':','2','"','6','*',$7B,'/',$7D,$7E,$7F
 rti
 
+.pad [$E000]
 .asm code
 
 .pad [VECTORS]

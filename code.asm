@@ -126,7 +126,7 @@ _Run
     .word tCondEnd      # $29 )
     .word tIgnore     # $2A *
     .word tOpcode     # $2B + sum
-    .word tIgnore     # $2C ,
+    .word tOpcode        # $2C ,
     .word tOpcode     # $2D - sub
     .word tIgnore     # $2E .
     .word tIgnore     # $2F /
@@ -215,13 +215,19 @@ _Run
     .word tNot       # $7E ~
     .word tIgnore    # DELETE
 # Tokens
+# ============================================
+# → End of File
 __tEOF
     lda <OP>; beq (next); jmp [oRUN]
     ___next
     bit [$7040]; bpl (next)
 jmp [CODEEND]
+# ============================================
+# → Ignore
 __tIgnore
 jmp [tEND]
+# ============================================
+# → Operation
 __tOpcode
     lda <OP>; beq (next); jmp [oRUN]
     ___next
@@ -229,6 +235,9 @@ __tOpcode
     tsx; stx <OPStack>
     ldx $7F; txs
 jmp [tEND]
+
+# ============================================
+# A-Z → Variable
 __tVariable
     # hi byte
     ldx 0
@@ -238,11 +247,17 @@ __tVariable
     pha
     
 jmp [tEND]
+
+# ============================================
+#  → End Command
 __tEndCmd
     lda <OP>; beq (next); jmp [oRUN]
     __next
     ldx $FF; txs
 jmp [tEND]
+
+# ============================================
+# ( → Conditional Start
 __tCondStart
     lda <OP>; beq (next); jmp [oRUN]
     ___next
@@ -299,6 +314,9 @@ __tCondStart
     jmp [tEND]
     ___endOfFile
     jmp [CODEEND]
+    
+# ============================================
+# ) → Conditional End
 __tCondEnd
     lda <OP>; beq (next); jmp [oRUN]
     ___next
@@ -351,6 +369,9 @@ __tCondEnd
     ___endOfFile
     jmp [CODEEND]
 jmp [tEND]
+
+# ============================================
+# " → Ascii String
 __tString
     ___findEnd
         inc Y; beq (ERROR)
@@ -366,6 +387,9 @@ __tString
 jmp [tEND]
 ___endOfFile
 jmp [CODEEND]
+
+# ============================================
+# $ → Hex Number
 __tHexNumber
     ___1stNibble
     stz <R0>    
@@ -409,10 +433,15 @@ __tHexNumber
     ___done
     dec Y
 jmp [tEND]
+# ============================================
+# 0-9 → Decimal Number
 __tDecNumber
     lda [<PC>+Y]
     sec; sbc '0'; pha
 jmp [tEND]
+
+# ============================================
+# # → Get byte at Address
 __tLoad
     tsx; stx <R0>;
     txa; ora %0111_1111
@@ -428,6 +457,8 @@ __tLoad
     __done
 jmp [tEND]
 
+# ============================================
+# ' → Convert value into a hex Ascii representation for printing
 __tHexAscii
     tsx; stx <R0>; txa; ora %0111_1111; tax; stx <R1>
     
@@ -455,6 +486,8 @@ jmp [tEND]
 ___table
 .byte '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
 
+# ============================================
+# ! → Test if zero
 __tInv
   stz <R0>
   tsx; bpl (operator)
@@ -475,6 +508,8 @@ jmp [tEND]
   lda 1; pha
 jmp [tEND]
 
+# ============================================
+# ~ → Bitwise NOT on value
 __tNot
     lda $EE; sta [$6C30]
     tsx; stx <R0> 
@@ -487,6 +522,8 @@ __tNot
     ldx <R0>; txs
 jmp [tEND]
 
+# ============================================
+# r → Generate a random 8bit value
 __tRandom
   ldx 8
   lda <RSEED+0>
@@ -566,9 +603,9 @@ __OPCODES
   .word oIgnore       # 39
   .word oStore        # 3A  :
   .word oIgnore       # 3B
-  .word oIgnore       # 3C
-  .word oIgnore       # 3D
-  .word oIgnore       # 3E
+  .word oLesser       # 3C  <
+  .word oEqual        # 3D  =
+  .word oGreater      # 3E  >
   .word oIgnore       # 3F
   # Uppercase
   .word oIgnore       # 40
@@ -675,12 +712,106 @@ jmp [oEND]
 # ============================================
 # COMPARE OPS
 # ============================================
+# Equal → Are the Operand and Operator equal?
 __oEqual
+  tsx; stx <R0>; txa
+  ldx $FF; ldy $7F
+  ora %1000_0000; sec; sbc <OPStack>; sta <R0+1>
+    beq (mainloop)
+    bcc (longerOperator)
+    bcs (longerOperand)
+  ___mainloop
+    lda [$0100+X]; cmp [$0100+Y]; bne (false)
+  dec X; dec Y; cpx <OPStack>; bne (mainloop)
+  ___true
+  ldx $ff; txs
+  lda 1; pha
+  tsx; stx <OPStack>
 jmp [oEND]
+  ___false
+  ldx $ff; txs
+  lda 0; pha
+  tsx; stx <OPStack>
+jmp [oEND]
+  ___longerOperand
+    lda [$0100+X]; bne (false)
+  dec X; dec <R0+1>; bne (longerOperand)
+  bra (mainloop)
+  ___longerOperator
+    lda [$0100+Y]; bne (false)
+  dec Y; inc <R0+1>; bne (longerOperator)
+  bra (mainloop)
+
+# Lesser → Is the Operand less than the Operator?
 __oLesser
+  tsx; stx <R0>; txa
+  ldx $FF; ldy $7F
+  ora %1000_0000; sec; sbc <OPStack>; sta <R0+1>
+    beq (mainloop)
+    bcc (longerOperator)
+    bcs (longerOperand)
+  ___mainloop
+    lda [$0100+X]; cmp [$0100+Y]; bcc (true)
+  dec X; dec Y; cpx <OPStack>; bne (mainloop)
+  ___false
+  ldx $ff; txs
+  lda 0; pha
+  tsx; stx <OPStack>
 jmp [oEND]
+  ___true
+  ldx $ff; txs
+  lda 1; pha
+  tsx; stx <OPStack>
+jmp [oEND]
+  ___false
+  ldx $ff; txs
+  lda 0; pha
+  tsx; stx <OPStack>
+jmp [oEND]
+  ___longerOperand
+    lda [$0100+X]; bne (false)
+  dec X; dec <R0+1>; bne (longerOperand)
+  bra (mainloop)
+  ___longerOperator
+    lda [$0100+Y]; bne (true)
+  dec Y; inc <R0+1>; bne (longerOperator)
+  bra (mainloop)
+  
+# Greater → Is the Operand larger than the Operator?
 __oGreater
+  tsx; stx <R0>; txa
+  ldx $FF; ldy $7F
+  ora %1000_0000; sec; sbc <OPStack>; sta <R0+1>
+    beq (mainloop)
+    bcc (longerOperator)
+    bcs (longerOperand)
+  ___mainloop
+    lda [$0100+X]; cmp [$0100+Y]; bcc (false); bne (true)
+  dec X; dec Y; cpx <OPStack>; bne (mainloop)
+  ___false
+  ldx $ff; txs
+  lda 0; pha
+  tsx; stx <OPStack>
 jmp [oEND]
+  ___true
+  ldx $ff; txs
+  lda 1; pha
+  tsx; stx <OPStack>
+jmp [oEND]
+  ___false
+  ldx $ff; txs
+  lda 0; pha
+  tsx; stx <OPStack>
+jmp [oEND]
+  ___longerOperand
+    lda [$0100+X]; bne (true)
+  dec X; dec <R0+1>; bne (longerOperand)
+  bra (mainloop)
+  ___longerOperator
+    lda [$0100+Y]; bne (false)
+  dec Y; inc <R0+1>; bne (longerOperator)
+  bra (mainloop)
+
 # ============================================
 # MATH OPS
 # ============================================
